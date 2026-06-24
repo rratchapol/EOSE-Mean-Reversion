@@ -1,4 +1,5 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import crypto from "node:crypto";
 import path from "node:path";
 import { hasRedisEnv, redisHdel, redisHset, redisHvals } from "@/lib/db/redis-store";
 
@@ -11,7 +12,12 @@ export type LineWebhookUser = {
 
 const dataDir = path.join(process.cwd(), "data");
 const usersPath = path.join(dataDir, "line-users.json");
-const usersKey = "eose:line-users";
+
+function usersKey(): string {
+  const channelSecret = process.env.LINE_CHANNEL_SECRET ?? "default";
+  const channelHash = crypto.createHash("sha256").update(channelSecret).digest("hex").slice(0, 12);
+  return `eose:line-users:${channelHash}`;
+}
 
 async function readUsers(): Promise<LineWebhookUser[]> {
   try {
@@ -29,7 +35,7 @@ async function writeUsers(users: LineWebhookUser[]): Promise<void> {
 
 export async function saveLineWebhookUser(user: LineWebhookUser): Promise<void> {
   if (hasRedisEnv()) {
-    await redisHset(usersKey, user.userId, user);
+    await redisHset(usersKey(), user.userId, user);
     return;
   }
 
@@ -40,7 +46,7 @@ export async function saveLineWebhookUser(user: LineWebhookUser): Promise<void> 
 
 export async function getLineWebhookUsers(): Promise<LineWebhookUser[]> {
   if (hasRedisEnv()) {
-    return redisHvals<LineWebhookUser>(usersKey);
+    return redisHvals<LineWebhookUser>(usersKey());
   }
 
   return readUsers();
@@ -48,7 +54,7 @@ export async function getLineWebhookUsers(): Promise<LineWebhookUser[]> {
 
 export async function removeLineWebhookUser(userId: string): Promise<void> {
   if (hasRedisEnv()) {
-    await redisHdel(usersKey, userId);
+    await redisHdel(usersKey(), userId);
     return;
   }
 
