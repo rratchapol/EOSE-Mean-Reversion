@@ -139,3 +139,34 @@ npm run backtest -- EOSE 60d
 ```
 
 The MVP backtest ignores point-in-time news availability and only tests the technical setup.
+
+## Deploy on Vercel
+
+This project includes `vercel.json` cron jobs:
+
+- `/api/cron/market`: runs every 15 minutes during a broad UTC window, then skips unless it is 6:30 AM-1:00 PM America/Los_Angeles, Monday-Friday.
+- `/api/cron/daily`: runs daily around noon Pacific during daylight saving time, then skips if market is open.
+
+Recommended Vercel environment variables:
+
+```bash
+MARKET_DATA_MODE=yahoo
+NEWS_RISK_MODE=auto
+NEWS_RISK_LOOKBACK_DAYS=14
+SEC_USER_AGENT=EOSE Scanner your-email@example.com
+LINE_CHANNEL_ACCESS_TOKEN=
+LINE_CHANNEL_SECRET=
+LINE_USER_ID=
+ALERT_DEDUP_MINUTES=60
+CRON_SECRET=
+UPSTASH_REDIS_REST_URL=
+UPSTASH_REDIS_REST_TOKEN=
+```
+
+Use Upstash Redis on Vercel for persistent scan history and duplicate-alert suppression. If Redis env vars are missing, the app falls back to local file storage, which is not durable on Vercel.
+
+After deploy, set the LINE webhook URL to:
+
+```text
+https://your-vercel-domain.vercel.app/api/line/webhook
+```

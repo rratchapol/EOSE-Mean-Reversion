@@ -1,9 +1,11 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { hasRedisEnv, redisLpushTrim, redisLrange } from "@/lib/db/redis-store";
 import type { ScannerResult, StoredSignal } from "@/lib/types";
 
 const dataDir = path.join(process.cwd(), "data");
 const historyPath = path.join(dataDir, "scanner-history.json");
+const historyKey = "eose:scanner-history";
 
 async function readHistoryFile(): Promise<StoredSignal[]> {
   try {
@@ -23,6 +25,10 @@ async function writeHistoryFile(history: StoredSignal[]): Promise<void> {
 }
 
 export async function getSignalHistory(limit = 25): Promise<StoredSignal[]> {
+  if (hasRedisEnv()) {
+    return redisLrange<StoredSignal>(historyKey, 0, limit - 1);
+  }
+
   const history = await readHistoryFile();
   return history
     .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
@@ -34,7 +40,7 @@ export async function hasRecentSetupAlert(
   dedupMinutes: number,
 ): Promise<boolean> {
   const since = Date.now() - dedupMinutes * 60 * 1000;
-  const history = await readHistoryFile();
+  const history = await getSignalHistory(250);
 
   return history.some(
     (item) =>
@@ -64,6 +70,11 @@ export async function saveSignal(
     alertSent: alert.sent,
     alertReason: alert.reason,
   };
+
+  if (hasRedisEnv()) {
+    await redisLpushTrim(historyKey, item, 250);
+    return item;
+  }
 
   const history = await readHistoryFile();
   await writeHistoryFile([item, ...history].slice(0, 250));
