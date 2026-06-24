@@ -1,0 +1,118 @@
+import { atr } from "@/lib/indicators/atr";
+import { getYahooCandles } from "@/lib/market-data/yahoo";
+import { getNewsRisk } from "@/lib/news/news-risk";
+import type { Candle } from "@/lib/types";
+
+type DailyRangeResult = {
+  ticker: string;
+  price: number;
+  bias: "BULLISH" | "NEUTRAL" | "BEARISH" | "AVOID";
+  confidence: "LOW" | "MEDIUM" | "HIGH";
+  atr14: number;
+  conservative: { low: number; high: number };
+  expected: { low: number; high: number };
+  extreme: { low: number; high: number };
+  support: number[];
+  resistance: number[];
+  reasons: string[];
+  newsNote: string;
+  createdAt: string;
+};
+
+function roundPrice(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function recentLevels(candles: Candle[], type: "support" | "resistance"): number[] {
+  const values = candles
+    .slice(-30)
+    .map((candle) => (type === "support" ? candle.low : candle.high))
+    .sort((a, b) => (type === "support" ? a - b : b - a));
+
+  return [...new Set(values.map(roundPrice))].slice(0, 3);
+}
+
+function trendBias(candles1h: Candle[]): "BULLISH" | "NEUTRAL" | "BEARISH" {
+  const recent = candles1h.slice(-8);
+  const first = recent.at(0);
+  const last = recent.at(-1);
+  if (!first || !last) return "NEUTRAL";
+
+  const change = (last.close - first.close) / first.close;
+  if (change > 0.025) return "BULLISH";
+  if (change < -0.025) return "BEARISH";
+  return "NEUTRAL";
+}
+
+export async function buildDailyRange(ticker = "EOSE"): Promise<DailyRangeResult> {
+  const [daily, candles1h, candles15m, newsRisk] = await Promise.all([
+    getYahooCandles(ticker, "1d", "6mo"),
+    getYahooCandles(ticker, "1h", "1mo"),
+    getYahooCandles(ticker, "15m", "5d"),
+    getNewsRisk(ticker),
+  ]);
+  const latest = candles15m.at(-1) ?? daily.at(-1);
+  const previousDay = daily.at(-2) ?? daily.at(-1);
+  if (!latest || !previousDay) {
+    throw new Error("Not enough candles to build daily range.");
+  }
+
+  const atr14 = atr(daily);
+  const price = latest.close;
+  const technicalBias = trendBias(candles1h);
+  const bias = !newsRisk.clean ? "AVOID" : technicalBias;
+  const downsideFactor = !newsRisk.clean ? 1.25 : technicalBias === "BEARISH" ? 1.05 : 0.8;
+  const upsideFactor = !newsRisk.clean ? 0.55 : technicalBias === "BULLISH" ? 1.05 : 0.8;
+  const expectedLow = Math.min(previousDay.low, price - atr14 * downsideFactor);
+  const expectedHigh = Math.max(previousDay.high, price + atr14 * upsideFactor);
+  const conservativeLow = Math.max(0, price - atr14 * 0.45 * downsideFactor);
+  const conservativeHigh = price + atr14 * 0.45 * upsideFactor;
+  const extremeLow = Math.min(Math.max(0, price - atr14 * 1.7 * downsideFactor), expectedLow);
+  const extremeHigh = Math.max(price + atr14 * 1.7 * upsideFactor, expectedHigh);
+
+  return {
+    ticker,
+    price: roundPrice(price),
+    bias,
+    confidence: newsRisk.clean ? "MEDIUM" : "LOW",
+    atr14: roundPrice(atr14),
+    conservative: { low: roundPrice(conservativeLow), high: roundPrice(conservativeHigh) },
+    expected: { low: roundPrice(expectedLow), high: roundPrice(expectedHigh) },
+    extreme: { low: roundPrice(extremeLow), high: roundPrice(extremeHigh) },
+    support: recentLevels(candles1h, "support"),
+    resistance: recentLevels(candles1h, "resistance"),
+    reasons: [
+      `News filter: ${newsRisk.clean ? "clean" : "risk detected"}`,
+      `1H trend bias: ${technicalBias}`,
+      `ATR14 daily: $${roundPrice(atr14).toFixed(2)}`,
+      `Previous day: low $${previousDay.low.toFixed(2)} / high $${previousDay.high.toFixed(2)}`,
+    ],
+    newsNote: newsRisk.note,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+export function buildDailyRangeLineMessage(range: DailyRangeResult): string {
+  return [
+    `${range.ticker} Daily Range Estimate`,
+    "",
+    `Price: $${range.price.toFixed(2)}`,
+    `Bias: ${range.bias}`,
+    `Confidence: ${range.confidence}`,
+    `ATR14: $${range.atr14.toFixed(2)}`,
+    "",
+    `Conservative: $${range.conservative.low.toFixed(2)} - $${range.conservative.high.toFixed(2)}`,
+    `Expected: $${range.expected.low.toFixed(2)} - $${range.expected.high.toFixed(2)}`,
+    `Extreme: $${range.extreme.low.toFixed(2)} - $${range.extreme.high.toFixed(2)}`,
+    "",
+    `Support: ${range.support.map((value) => `$${value.toFixed(2)}`).join(", ")}`,
+    `Resistance: ${range.resistance.map((value) => `$${value.toFixed(2)}`).join(", ")}`,
+    "",
+    "Reasons:",
+    ...range.reasons.map((reason) => `- ${reason}`),
+    "",
+    `News: ${range.newsNote}`,
+    "",
+    "Use as an estimate, not a guaranteed high/low.",
+  ].join("\n");
+}

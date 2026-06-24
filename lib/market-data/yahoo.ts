@@ -20,14 +20,17 @@ type YahooChartResponse = {
   };
 };
 
-function intervalRange(interval: "15m" | "1h", range?: string): string {
+export type YahooInterval = "15m" | "1h" | "1d";
+
+function intervalRange(interval: YahooInterval, range?: string): string {
   if (range) return range;
+  if (interval === "1d") return "6mo";
   return interval === "15m" ? "5d" : "3mo";
 }
 
 export async function getYahooCandles(
   ticker: string,
-  interval: "15m" | "1h",
+  interval: YahooInterval,
   range?: string,
 ): Promise<Candle[]> {
   const url = new URL(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}`);

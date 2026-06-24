@@ -183,3 +183,21 @@ After deploy, set the LINE webhook URL to:
 ```text
 https://your-vercel-domain.vercel.app/api/line/webhook
 ```
+
+## Daily Range LINE Alert
+
+The daily range agent estimates a probabilistic range from daily ATR, 1H structure, support/resistance, and the news filter.
+
+Manual check:
+
+```bash
+curl https://your-vercel-domain.vercel.app/api/daily-range
+```
+
+Send LINE alert:
+
+```bash
+curl -H "Authorization: Bearer your_CRON_SECRET" https://your-vercel-domain.vercel.app/api/cron/daily-range
+```
+
+`vercel.json` schedules `/api/cron/daily-range` at `03:40 UTC`, which is `20:40 America/Los_Angeles` on the previous calendar day.
