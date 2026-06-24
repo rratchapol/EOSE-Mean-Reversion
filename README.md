@@ -184,6 +184,8 @@ ALERT_DEDUP_MINUTES=60
 CRON_SECRET=
 UPSTASH_REDIS_REST_URL=
 UPSTASH_REDIS_REST_TOKEN=
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-2.5-flash
 ```
 
 Use Upstash Redis on Vercel for persistent scan history and duplicate-alert suppression. If Redis env vars are missing, the app falls back to local file storage, which is not durable on Vercel.
@@ -197,6 +199,7 @@ https://your-vercel-domain.vercel.app/api/line/webhook
 ## Daily Range LINE Alert
 
 The daily range agent estimates a probabilistic range from daily ATR, 1H structure, support/resistance, and the news filter.
+If `GEMINI_API_KEY` is configured, it also appends a short Thai AI analysis to the LINE message using the Gemini API from Google AI Studio.
 
 Manual check:
 

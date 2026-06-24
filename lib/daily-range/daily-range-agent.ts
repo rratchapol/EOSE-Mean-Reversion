@@ -19,6 +19,8 @@ type DailyRangeResult = {
   createdAt: string;
 };
 
+export type { DailyRangeResult };
+
 function roundPrice(value: number): number {
   return Math.round(value * 100) / 100;
 }
@@ -111,8 +113,8 @@ export async function buildDailyRange(ticker = "EOSE"): Promise<DailyRangeResult
   };
 }
 
-export function buildDailyRangeLineMessage(range: DailyRangeResult): string {
-  return [
+export function buildDailyRangeLineMessage(range: DailyRangeResult, aiAnalysis?: string | null): string {
+  const message = [
     `${range.ticker} ประเมินกรอบราคาประจำวัน`,
     "",
     `ราคาล่าสุด: $${range.price.toFixed(2)}`,
@@ -131,7 +133,13 @@ export function buildDailyRangeLineMessage(range: DailyRangeResult): string {
     ...range.reasons.map((reason) => `- ${reason}`),
     "",
     `ข่าว: ${range.newsNote}`,
-    "",
-    "ใช้เป็นกรอบประเมิน ไม่ใช่การการันตี high/low",
-  ].join("\n");
+  ];
+
+  if (aiAnalysis) {
+    message.push("", "AI วิเคราะห์:", aiAnalysis);
+  }
+
+  message.push("", "ใช้เป็นกรอบประเมิน ไม่ใช่การการันตี high/low");
+
+  return message.join("\n");
 }
