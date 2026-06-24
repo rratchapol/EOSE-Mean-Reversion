@@ -57,6 +57,14 @@ After a user is captured:
 npm run line:set-user
 ```
 
+Debug LINE configuration:
+
+```text
+/api/line/debug
+```
+
+When a user messages the bot, the webhook replies with a registration confirmation and that user's `userId`. On Vercel, use Upstash Redis for durable multi-user storage.
+
 Then call:
 
 ```bash
