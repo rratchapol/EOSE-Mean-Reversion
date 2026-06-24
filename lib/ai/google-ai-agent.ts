@@ -9,32 +9,41 @@ type GeminiResponse = {
   }>;
 };
 
+type GeminiAttempt = {
+  model: string;
+  text?: string;
+  error?: string;
+};
+
 export function hasGoogleAiConfig(): boolean {
   return Boolean(process.env.GEMINI_API_KEY);
 }
 
-export async function analyzeDailyRangeWithGoogleAi(
-  range: DailyRangeResult,
-): Promise<string | null> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return null;
+function modelCandidates(): string[] {
+  const primary = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
+  const fallbacks = (
+    process.env.GEMINI_FALLBACK_MODELS ||
+    "gemini-3.1-flash-lite,gemini-3.5-flash,gemini-3-flash,gemini-2.5-flash"
+  )
+    .split(",")
+    .map((model) => model.trim())
+    .filter(Boolean);
 
-  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
-  const url = new URL(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-  );
-  url.searchParams.set("key", apiKey);
+  return [...new Set([primary, ...fallbacks])];
+}
 
-  const prompt = [
-    "คุณคือผู้ช่วยวิเคราะห์หุ้นเชิงความเสี่ยงสำหรับ trader รายย่อย",
-    "ตอบเป็นภาษาไทยเท่านั้น และตอบสั้นมาก ไม่เกิน 5 บรรทัด",
-    "รูปแบบที่ต้องการ:",
+function buildPrompt(range: DailyRangeResult): string {
+  return [
+    "You are a risk-focused stock analysis assistant for retail traders.",
+    "Answer in Thai only.",
+    "Keep the answer complete and concise: exactly 5 short lines.",
+    "Use this fixed format:",
     "1) มุมมอง: ...",
     "2) กรอบวันนี้: ...",
     "3) จุดเสี่ยง/ข่าว: ...",
     "4) เงื่อนไขที่ต้องรอก่อนเข้า: ...",
     "5) Invalidate: ...",
-    "ห้ามบอกว่าเป็นคำแนะนำการลงทุน ห้ามฟันธง high/low แน่นอน",
+    "Do not claim certainty. Do not say this is investment advice.",
     "",
     JSON.stringify(
       {
@@ -55,6 +64,17 @@ export async function analyzeDailyRangeWithGoogleAi(
       2,
     ),
   ].join("\n");
+}
+
+async function callGemini(
+  model: string,
+  apiKey: string,
+  prompt: string,
+): Promise<GeminiAttempt> {
+  const url = new URL(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+  );
+  url.searchParams.set("key", apiKey);
 
   const response = await fetch(url, {
     method: "POST",
@@ -63,7 +83,7 @@ export async function analyzeDailyRangeWithGoogleAi(
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
         temperature: 0.1,
-        maxOutputTokens: 1600,
+        maxOutputTokens: 2048,
         thinkingConfig: {
           thinkingBudget: 0,
         },
@@ -73,7 +93,10 @@ export async function analyzeDailyRangeWithGoogleAi(
   });
 
   if (!response.ok) {
-    return `AI วิเคราะห์ไม่ได้: ${await response.text()}`;
+    return {
+      model,
+      error: `${response.status}: ${await response.text()}`,
+    };
   }
 
   const body = (await response.json()) as GeminiResponse;
@@ -84,10 +107,39 @@ export async function analyzeDailyRangeWithGoogleAi(
     .join("")
     .trim();
 
-  if (!text) return "AI วิเคราะห์ไม่ได้: ไม่พบข้อความตอบกลับ";
-  if (candidate?.finishReason === "MAX_TOKENS") {
-    return `${text}\n(หมายเหตุ: AI ตอบยาวเกินและถูกตัด)`;
+  if (!text) {
+    return { model, error: "empty response" };
   }
 
-  return text;
+  if (candidate?.finishReason === "MAX_TOKENS") {
+    return { model, error: `MAX_TOKENS: ${text}` };
+  }
+
+  return { model, text };
+}
+
+export async function analyzeDailyRangeWithGoogleAi(
+  range: DailyRangeResult,
+): Promise<string | null> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return null;
+
+  const prompt = buildPrompt(range);
+  const attempts: GeminiAttempt[] = [];
+
+  for (const model of modelCandidates()) {
+    const attempt = await callGemini(model, apiKey, prompt);
+    attempts.push(attempt);
+    if (attempt.text) return attempt.text;
+  }
+
+  const last = attempts.at(-1);
+  return [
+    "AI วิเคราะห์ไม่ได้ชั่วคราว",
+    last ? `model ล่าสุด: ${last.model}` : "ไม่พบ model ที่ลองเรียก",
+    last?.error ? `สาเหตุ: ${last.error.slice(0, 220)}` : "",
+    "ระบบยังส่งกรอบราคา/ข่าว/แนวรับแนวต้านได้ตามปกติ",
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
