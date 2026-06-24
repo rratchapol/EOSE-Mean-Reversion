@@ -65,6 +65,8 @@ curl -X POST http://localhost:3000/api/alerts/line
 
 The endpoint only sends when scanner status is `SETUP`.
 
+When deployed with Upstash Redis, every user who adds/messages the LINE bot is stored and receives alerts. `LINE_USER_ID` is only used as a fallback when no webhook users have been captured yet.
+
 ## Scan Worker
 
 With the dev server running, record a scan and send LINE only when needed:

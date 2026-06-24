@@ -41,3 +41,16 @@ export async function redisLpushTrim<T>(key: string, value: T, maxItems: number)
   await redisCommand(["LPUSH", key, JSON.stringify(value)]);
   await redisCommand(["LTRIM", key, 0, maxItems - 1]);
 }
+
+export async function redisHset<T>(key: string, field: string, value: T): Promise<void> {
+  await redisCommand(["HSET", key, field, JSON.stringify(value)]);
+}
+
+export async function redisHdel(key: string, field: string): Promise<void> {
+  await redisCommand(["HDEL", key, field]);
+}
+
+export async function redisHvals<T>(key: string): Promise<T[]> {
+  const values = await redisCommand<string[]>(["HVALS", key]);
+  return values.map((value) => JSON.parse(value) as T);
+}

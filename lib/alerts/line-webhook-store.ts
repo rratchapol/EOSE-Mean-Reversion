@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { hasRedisEnv, redisHdel, redisHset, redisHvals } from "@/lib/db/redis-store";
 
 export type LineWebhookUser = {
   userId: string;
@@ -10,6 +11,7 @@ export type LineWebhookUser = {
 
 const dataDir = path.join(process.cwd(), "data");
 const usersPath = path.join(dataDir, "line-users.json");
+const usersKey = "eose:line-users";
 
 async function readUsers(): Promise<LineWebhookUser[]> {
   try {
@@ -26,11 +28,30 @@ async function writeUsers(users: LineWebhookUser[]): Promise<void> {
 }
 
 export async function saveLineWebhookUser(user: LineWebhookUser): Promise<void> {
+  if (hasRedisEnv()) {
+    await redisHset(usersKey, user.userId, user);
+    return;
+  }
+
   const users = await readUsers();
   const withoutDuplicate = users.filter((item) => item.userId !== user.userId);
-  await writeUsers([user, ...withoutDuplicate].slice(0, 20));
+  await writeUsers([user, ...withoutDuplicate].slice(0, 500));
 }
 
 export async function getLineWebhookUsers(): Promise<LineWebhookUser[]> {
+  if (hasRedisEnv()) {
+    return redisHvals<LineWebhookUser>(usersKey);
+  }
+
   return readUsers();
+}
+
+export async function removeLineWebhookUser(userId: string): Promise<void> {
+  if (hasRedisEnv()) {
+    await redisHdel(usersKey, userId);
+    return;
+  }
+
+  const users = await readUsers();
+  await writeUsers(users.filter((user) => user.userId !== userId));
 }

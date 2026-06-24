@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { NextResponse } from "next/server";
-import { saveLineWebhookUser } from "@/lib/alerts/line-webhook-store";
+import { removeLineWebhookUser, saveLineWebhookUser } from "@/lib/alerts/line-webhook-store";
 
 type LineWebhookEvent = {
   type: string;
@@ -27,10 +27,12 @@ export async function POST(request: Request) {
   }
 
   const payload = JSON.parse(body) as { events?: LineWebhookEvent[] };
-  const users = payload.events?.filter((event) => event.source?.userId) ?? [];
+  const events = payload.events?.filter((event) => event.source?.userId) ?? [];
+  const activeUsers = events.filter((event) => event.type !== "unfollow");
+  const unfollowedUsers = events.filter((event) => event.type === "unfollow");
 
   await Promise.all(
-    users.map((event) =>
+    activeUsers.map((event) =>
       saveLineWebhookUser({
         userId: event.source?.userId ?? "",
         sourceType: event.source?.type ?? "unknown",
@@ -39,6 +41,13 @@ export async function POST(request: Request) {
       }),
     ),
   );
+  await Promise.all(
+    unfollowedUsers.map((event) => removeLineWebhookUser(event.source?.userId ?? "")),
+  );
 
-  return NextResponse.json({ ok: true, usersCaptured: users.length });
+  return NextResponse.json({
+    ok: true,
+    usersCaptured: activeUsers.length,
+    usersRemoved: unfollowedUsers.length,
+  });
 }

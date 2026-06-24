@@ -1,3 +1,4 @@
+import { getLineWebhookUsers } from "@/lib/alerts/line-webhook-store";
 import type { ScannerResult } from "@/lib/types";
 
 function money(value: number): string {
@@ -30,32 +31,37 @@ export async function sendLineAlert(
 
 export async function sendLineText(text: string): Promise<{ sent: boolean; reason?: string }> {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
-  const userId = process.env.LINE_USER_ID;
+  const users = await getLineWebhookUsers();
+  const userIds = users.map((user) => user.userId);
+  const fallbackUserId = process.env.LINE_USER_ID;
+  const recipients = userIds.length > 0 ? userIds : fallbackUserId ? [fallbackUserId] : [];
 
-  if (!token || !userId) {
+  if (!token || recipients.length === 0) {
     return {
       sent: false,
-      reason: "LINE_CHANNEL_ACCESS_TOKEN or LINE_USER_ID is missing.",
+      reason: "LINE_CHANNEL_ACCESS_TOKEN or LINE recipients are missing.",
     };
   }
 
-  const response = await fetch("https://api.line.me/v2/bot/message/push", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      to: userId,
-      messages: [{ type: "text", text }],
-    }),
-  });
+  for (const userId of recipients) {
+    const response = await fetch("https://api.line.me/v2/bot/message/push", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        to: userId,
+        messages: [{ type: "text", text }],
+      }),
+    });
 
-  if (!response.ok) {
-    return {
-      sent: false,
-      reason: await response.text(),
-    };
+    if (!response.ok) {
+      return {
+        sent: false,
+        reason: `Failed for ${userId}: ${await response.text()}`,
+      };
+    }
   }
 
   return { sent: true };
