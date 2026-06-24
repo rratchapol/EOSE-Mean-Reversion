@@ -19,7 +19,7 @@ export async function analyzeDailyRangeWithGoogleAi(
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
 
-  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
   const url = new URL(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
   );
@@ -63,7 +63,10 @@ export async function analyzeDailyRangeWithGoogleAi(
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
         temperature: 0.1,
-        maxOutputTokens: 900,
+        maxOutputTokens: 1600,
+        thinkingConfig: {
+          thinkingBudget: 0,
+        },
       },
     }),
     cache: "no-store",

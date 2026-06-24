@@ -185,7 +185,7 @@ CRON_SECRET=
 UPSTASH_REDIS_REST_URL=
 UPSTASH_REDIS_REST_TOKEN=
 GEMINI_API_KEY=
-GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MODEL=gemini-2.5-flash-lite
 ```
 
 Use Upstash Redis on Vercel for persistent scan history and duplicate-alert suppression. If Redis env vars are missing, the app falls back to local file storage, which is not durable on Vercel.
