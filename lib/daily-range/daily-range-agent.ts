@@ -44,6 +44,25 @@ function trendBias(candles1h: Candle[]): "BULLISH" | "NEUTRAL" | "BEARISH" {
   return "NEUTRAL";
 }
 
+function thaiBias(bias: DailyRangeResult["bias"]): string {
+  const labels = {
+    BULLISH: "เอนขึ้น",
+    NEUTRAL: "กลาง ๆ",
+    BEARISH: "เอนลง",
+    AVOID: "หลีกเลี่ยง",
+  };
+  return labels[bias];
+}
+
+function thaiConfidence(confidence: DailyRangeResult["confidence"]): string {
+  const labels = {
+    LOW: "ต่ำ",
+    MEDIUM: "ปานกลาง",
+    HIGH: "สูง",
+  };
+  return labels[confidence];
+}
+
 export async function buildDailyRange(ticker = "EOSE"): Promise<DailyRangeResult> {
   const [daily, candles1h, candles15m, newsRisk] = await Promise.all([
     getYahooCandles(ticker, "1d", "6mo"),
@@ -82,10 +101,10 @@ export async function buildDailyRange(ticker = "EOSE"): Promise<DailyRangeResult
     support: recentLevels(candles1h, "support"),
     resistance: recentLevels(candles1h, "resistance"),
     reasons: [
-      `News filter: ${newsRisk.clean ? "clean" : "risk detected"}`,
-      `1H trend bias: ${technicalBias}`,
-      `ATR14 daily: $${roundPrice(atr14).toFixed(2)}`,
-      `Previous day: low $${previousDay.low.toFixed(2)} / high $${previousDay.high.toFixed(2)}`,
+      `ตัวกรองข่าว: ${newsRisk.clean ? "ไม่พบความเสี่ยง" : "พบข่าว/filing เสี่ยง"}`,
+      `แนวโน้ม 1H: ${thaiBias(technicalBias)}`,
+      `ATR14 รายวัน: $${roundPrice(atr14).toFixed(2)}`,
+      `วันก่อนหน้า: low $${previousDay.low.toFixed(2)} / high $${previousDay.high.toFixed(2)}`,
     ],
     newsNote: newsRisk.note,
     createdAt: new Date().toISOString(),
@@ -94,25 +113,25 @@ export async function buildDailyRange(ticker = "EOSE"): Promise<DailyRangeResult
 
 export function buildDailyRangeLineMessage(range: DailyRangeResult): string {
   return [
-    `${range.ticker} Daily Range Estimate`,
+    `${range.ticker} ประเมินกรอบราคาประจำวัน`,
     "",
-    `Price: $${range.price.toFixed(2)}`,
-    `Bias: ${range.bias}`,
-    `Confidence: ${range.confidence}`,
-    `ATR14: $${range.atr14.toFixed(2)}`,
+    `ราคาล่าสุด: $${range.price.toFixed(2)}`,
+    `มุมมอง: ${thaiBias(range.bias)}`,
+    `ความมั่นใจ: ${thaiConfidence(range.confidence)}`,
+    `ATR14 รายวัน: $${range.atr14.toFixed(2)}`,
     "",
-    `Conservative: $${range.conservative.low.toFixed(2)} - $${range.conservative.high.toFixed(2)}`,
-    `Expected: $${range.expected.low.toFixed(2)} - $${range.expected.high.toFixed(2)}`,
-    `Extreme: $${range.extreme.low.toFixed(2)} - $${range.extreme.high.toFixed(2)}`,
+    `กรอบแคบ: $${range.conservative.low.toFixed(2)} - $${range.conservative.high.toFixed(2)}`,
+    `กรอบคาดหวัง: $${range.expected.low.toFixed(2)} - $${range.expected.high.toFixed(2)}`,
+    `กรอบสุดโต่ง: $${range.extreme.low.toFixed(2)} - $${range.extreme.high.toFixed(2)}`,
     "",
-    `Support: ${range.support.map((value) => `$${value.toFixed(2)}`).join(", ")}`,
-    `Resistance: ${range.resistance.map((value) => `$${value.toFixed(2)}`).join(", ")}`,
+    `แนวรับ: ${range.support.map((value) => `$${value.toFixed(2)}`).join(", ")}`,
+    `แนวต้าน: ${range.resistance.map((value) => `$${value.toFixed(2)}`).join(", ")}`,
     "",
-    "Reasons:",
+    "เหตุผล:",
     ...range.reasons.map((reason) => `- ${reason}`),
     "",
-    `News: ${range.newsNote}`,
+    `ข่าว: ${range.newsNote}`,
     "",
-    "Use as an estimate, not a guaranteed high/low.",
+    "ใช้เป็นกรอบประเมิน ไม่ใช่การการันตี high/low",
   ].join("\n");
 }
