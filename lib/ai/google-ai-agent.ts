@@ -2,6 +2,7 @@ import type { DailyRangeResult } from "@/lib/daily-range/daily-range-agent";
 
 type GeminiResponse = {
   candidates?: Array<{
+    finishReason?: string;
     content?: {
       parts?: Array<{ text?: string }>;
     };
@@ -26,9 +27,14 @@ export async function analyzeDailyRangeWithGoogleAi(
 
   const prompt = [
     "คุณคือผู้ช่วยวิเคราะห์หุ้นเชิงความเสี่ยงสำหรับ trader รายย่อย",
-    "ให้วิเคราะห์ EOSE เป็นภาษาไทย กระชับ ไม่เกิน 8 บรรทัด",
+    "ตอบเป็นภาษาไทยเท่านั้น และตอบสั้นมาก ไม่เกิน 5 บรรทัด",
+    "รูปแบบที่ต้องการ:",
+    "1) มุมมอง: ...",
+    "2) กรอบวันนี้: ...",
+    "3) จุดเสี่ยง/ข่าว: ...",
+    "4) เงื่อนไขที่ต้องรอก่อนเข้า: ...",
+    "5) Invalidate: ...",
     "ห้ามบอกว่าเป็นคำแนะนำการลงทุน ห้ามฟันธง high/low แน่นอน",
-    "ให้สรุป bias, กรอบราคา, จุด invalidate, และสิ่งที่ต้องรอก่อนเข้า",
     "",
     JSON.stringify(
       {
@@ -56,8 +62,8 @@ export async function analyzeDailyRangeWithGoogleAi(
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
-        temperature: 0.2,
-        maxOutputTokens: 500,
+        temperature: 0.1,
+        maxOutputTokens: 900,
       },
     }),
     cache: "no-store",
@@ -68,11 +74,17 @@ export async function analyzeDailyRangeWithGoogleAi(
   }
 
   const body = (await response.json()) as GeminiResponse;
-  const text = body.candidates?.[0]?.content?.parts
+  const candidate = body.candidates?.[0];
+  const text = candidate?.content?.parts
     ?.map((part) => part.text)
     .filter(Boolean)
     .join("")
     .trim();
 
-  return text || "AI วิเคราะห์ไม่ได้: ไม่พบข้อความตอบกลับ";
+  if (!text) return "AI วิเคราะห์ไม่ได้: ไม่พบข้อความตอบกลับ";
+  if (candidate?.finishReason === "MAX_TOKENS") {
+    return `${text}\n(หมายเหตุ: AI ตอบยาวเกินและถูกตัด)`;
+  }
+
+  return text;
 }
