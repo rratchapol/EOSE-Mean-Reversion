@@ -142,10 +142,23 @@ The MVP backtest ignores point-in-time news availability and only tests the tech
 
 ## Deploy on Vercel
 
-This project includes `vercel.json` cron jobs:
+This project includes a Vercel Hobby-compatible daily cron job:
 
-- `/api/cron/market`: runs every 15 minutes during a broad UTC window, then skips unless it is 6:30 AM-1:00 PM America/Los_Angeles, Monday-Friday.
-- `/api/cron/daily`: runs daily around noon Pacific during daylight saving time, then skips if market is open.
+- `/api/cron/daily`: runs once per day and skips if market is open.
+
+Vercel Hobby does not support every-15-minute cron jobs. For market-hours scanning, use an external cron service such as cron-job.org to call:
+
+```text
+https://your-vercel-domain.vercel.app/api/cron/market
+```
+
+Set the external cron schedule to every 15 minutes and include this header:
+
+```text
+Authorization: Bearer your_CRON_SECRET
+```
+
+The `/api/cron/market` route still checks Pacific market hours internally and skips outside 6:30 AM-1:00 PM America/Los_Angeles, Monday-Friday.
 
 Recommended Vercel environment variables:
 
