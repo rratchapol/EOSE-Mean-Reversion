@@ -3,7 +3,7 @@ import path from "node:path";
 import { hasRedisEnv, redisLpushTrim, redisLrange } from "@/lib/db/redis-store";
 import type { ScannerResult, StoredSignal } from "@/lib/types";
 
-const dataDir = path.join(process.cwd(), "data");
+const dataDir = process.env.VERCEL ? path.join("/tmp", "eose-scanner") : path.join(process.cwd(), "data");
 const historyPath = path.join(dataDir, "scanner-history.json");
 const historyKey = "eose:scanner-history";
 
